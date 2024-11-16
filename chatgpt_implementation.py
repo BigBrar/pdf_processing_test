@@ -1,117 +1,111 @@
 from PyPDF2 import PdfReader
-import pandas as pd
 import re
 
-def extract_sections_from_pdf(pdf_path):
+def extract_sections_with_subsections(pdf_path):
     reader = PdfReader(pdf_path)
     data = []
-    current_parent_section = ""
     current_section = ""
+    current_subsection = ""
+    current_subsubsection = ""
     current_title = ""
     current_body = ""
-    section_start_page = None
-    section_end_page = None
+    section_hierarchy = []
 
-    # Track processed sections to avoid duplicates
-    processed_sections = set()
-
-    # Patterns for headers and pages
-    page_pattern = re.compile(r'Page (\d+)')
-    section_pattern = re.compile(r'^(\d+(?:\.\d+)*)\s+(.+)$')  # Section numbers and titles
-    all_caps_pattern = re.compile(r'^[A-Z\s]+$')  # All caps titles
+    # Patterns for identifying sections and subsections
+    section_pattern = re.compile(r'^(\d+)(?:\.\d+)*$')  # Matches 1, 1.1, 1.1.1
+    all_caps_pattern = re.compile(r'^[A-Z\s]+$')  # Matches ALL CAPS titles
 
     for page_num, page in enumerate(reader.pages, start=1):
         lines = page.extract_text().split('\n')
         for line in lines:
             line = line.strip()
 
-            # Detect page numbers
-            if page_pattern.match(line):
+            if not line:
                 continue
 
-            # Detect section headers with numbering
-            section_match = section_pattern.match(line)
-            if section_match:
-                section_num = section_match.group(1)
-                section_title = section_match.group(2)
+            # Detect section numbers
+            words = line.split()
+            if words[0] and section_pattern.match(words[0]):
+                section_number = words[0]
+                section_title = " ".join(words[1:])
 
-                # Skip if section has already been processed
-                if section_num in processed_sections:
-                    continue
+                # Determine hierarchy
+                parts = section_number.split(".")
+                if len(parts) == 1:  # Top-level section
+                    if current_section:
+                        # Save the previous section
+                        data.append({
+                            "Section": current_section,
+                            "Title": current_title,
+                            "Content": current_body.strip(),
+                        })
+                    current_section = section_number
+                    current_subsection = ""
+                    current_subsubsection = ""
+                    current_title = section_title
+                    current_body = ""
+                elif len(parts) == 2:  # Subsection
+                    if current_subsection:
+                        # Save the previous subsection
+                        data.append({
+                            "Section": f"{current_section}.{current_subsection}",
+                            "Title": current_title,
+                            "Content": current_body.strip(),
+                        })
+                    current_subsection = parts[1]
+                    current_subsubsection = ""
+                    current_title = section_title
+                    current_body = ""
+                elif len(parts) == 3:  # Sub-subsection
+                    if current_subsubsection:
+                        # Save the previous sub-subsection
+                        data.append({
+                            "Section": f"{current_section}.{current_subsection}.{current_subsubsection}",
+                            "Title": current_title,
+                            "Content": current_body.strip(),
+                        })
+                    current_subsubsection = parts[2]
+                    current_title = section_title
+                    current_body = ""
+                continue
 
-                # Save the current section data before updating
-                if current_section or current_title:
+            # Detect ALL CAPS headings (titles without section numbers)
+            if all_caps_pattern.match(line):
+                if current_section:
                     data.append({
-                        'Parent section': current_parent_section,
-                        'Section': current_section,
-                        'Section Title': current_title,
-                        'Section Body text': current_body.strip(),
-                        'section-start page': section_start_page,
-                        'section-end page': section_end_page or section_start_page
+                        "Section": current_section,
+                        "Title": current_title,
+                        "Content": current_body.strip(),
                     })
-
-                # Mark the section as processed
-                processed_sections.add(section_num)
-
-                # Update current section details
-                current_section = section_num
-                current_title = section_title
-                current_body = ""
-                section_start_page = page_num
-                section_end_page = None
-
-            # Detect all caps titles (parent sections)
-            elif all_caps_pattern.match(line) and not section_pattern.match(line):
-                if current_section or current_title:
-                    data.append({
-                        'Parent section': current_parent_section,
-                        'Section': current_section,
-                        'Section Title': current_title,
-                        'Section Body text': current_body.strip(),
-                        'section-start page': section_start_page,
-                        'section-end page': section_end_page or section_start_page
-                    })
-                current_parent_section = line  # Set the new parent section
                 current_section = ""
-                current_title = ""
+                current_title = line
                 current_body = ""
-                section_start_page = page_num
-                section_end_page = None
+                continue
 
-            else:
-                # Accumulate body text
-                if current_section or current_title:
-                    current_body += line + " "
-
-        # Update end page for the last section on this page
-        section_end_page = page_num
+            # Accumulate content
+            current_body += line + " "
 
     # Save the last section
     if current_section or current_title:
         data.append({
-            'Parent section': current_parent_section,
-            'Section': current_section,
-            'Section Title': current_title,
-            'Section Body text': current_body.strip(),
-            'section-start page': section_start_page,
-            'section-end page': section_end_page
+            "Section": f"{current_section}.{current_subsection}.{current_subsubsection}".rstrip("."),
+            "Title": current_title,
+            "Content": current_body.strip(),
         })
 
     return data
 
-def save_to_csv(data, output_csv):
-    df = pd.DataFrame(data)
-    df.to_csv(output_csv, index=False)
-    return df
-
 # Example usage
 def main():
     pdf_path = "test.pdf"  # Replace with your PDF file path
-    output_csv_path = "output_extracted.csv"  # Replace with your desired output path
+    sections = extract_sections_with_subsections(pdf_path)
 
-    extracted_data = extract_sections_from_pdf(pdf_path)
-    save_to_csv(extracted_data, output_csv_path)
-    print(f"CSV file saved to: {output_csv_path}")
+    # Display the extracted sections
+    for section in sections:
+        print(f"Section: {section['Section']}")
+        print(f"Title: {section['Title']}")
+        print(f"Content: {section['Content']}")
+        print("-" * 50)
 
 if __name__ == "__main__":
     main()
