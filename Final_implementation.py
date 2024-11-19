@@ -25,12 +25,12 @@ def extract_sections_from_pdf(pdf_path):
     data = []
     current_parent_section = ""
     current_section = ""
-    current_subsection = ""
     current_title = ""
     current_body = ""
     section_start_page = None
     section_end_page = None
-
+    buffer_text = ""
+    
     # Track processed sections to avoid duplicates
     processed_sections = set()
 
@@ -54,36 +54,22 @@ def extract_sections_from_pdf(pdf_path):
                 section_num = section_match.group(1)
                 section_title = section_match.group(2)
 
-                # Save the parent subsection if missing
-                if current_subsection and not section_num.startswith(current_subsection) and "." in section_num:
-                    parent_subsection = ".".join(section_num.split(".")[:-1])
-                    if parent_subsection not in processed_sections:
-                        data.append({
-                            'Parent section': current_parent_section,
-                            'Section': parent_subsection,
-                            'Section Title': "",
-                            'Section Body text': "",
-                            'section-start page': section_start_page,
-                            'section-end page': page_num,
-                        })
-                        processed_sections.add(parent_subsection)
-
-                # Validate the next section number
+                # Validate and handle buffered text if a valid subsection appears
                 if current_section and not is_valid_subsection(current_section, section_num):
-                    # If invalid, treat as body text
-                    current_body += f"{section_num} {section_title} "
+                    buffer_text += f"{section_num} {section_title} "
                     continue
 
-                # Save the current section data before updating
+                # Save buffered text and current section before updating
                 if current_section or current_title:
                     data.append({
                         'Parent section': current_parent_section,
                         'Section': current_section,
                         'Section Title': current_title,
-                        'Section Body text': current_body.strip(),
+                        'Section Body text': (current_body + " " + buffer_text).strip(),
                         'section-start page': section_start_page,
                         'section-end page': section_end_page or section_start_page
                     })
+                    buffer_text = ""  # Clear buffer after saving
 
                 # Mark the section as processed
                 processed_sections.add(section_num)
@@ -92,7 +78,6 @@ def extract_sections_from_pdf(pdf_path):
                 top_level_section = section_num.split('.')[0]  # Extract top-level section
                 current_parent_section = top_level_section if section_num != top_level_section else ""
                 current_section = section_num
-                current_subsection = ".".join(section_num.split(".")[:-1]) if "." in section_num else ""
                 current_title = section_title
                 current_body = ""
                 section_start_page = page_num
@@ -105,22 +90,25 @@ def extract_sections_from_pdf(pdf_path):
                         'Parent section': current_parent_section,
                         'Section': current_section,
                         'Section Title': current_title,
-                        'Section Body text': current_body.strip(),
+                        'Section Body text': (current_body + " " + buffer_text).strip(),
                         'section-start page': section_start_page,
                         'section-end page': section_end_page or section_start_page
                     })
+                    buffer_text = ""
+
                 current_parent_section = ""  # Reset parent section for top-level sections
                 current_section = ""
-                current_subsection = ""
                 current_title = line
                 current_body = ""
                 section_start_page = page_num
                 section_end_page = None
 
             else:
-                # Accumulate body text
+                # Accumulate body text or buffer text if no valid header yet
                 if current_section or current_title:
                     current_body += line + " "
+                else:
+                    buffer_text += line + " "
 
         # Update end page for the last section on this page
         section_end_page = page_num
@@ -131,7 +119,7 @@ def extract_sections_from_pdf(pdf_path):
             'Parent section': current_parent_section,
             'Section': current_section,
             'Section Title': current_title,
-            'Section Body text': current_body.strip(),
+            'Section Body text': (current_body + " " + buffer_text).strip(),
             'section-start page': section_start_page,
             'section-end page': section_end_page
         })
@@ -146,13 +134,11 @@ def save_to_csv(data, output_csv):
     return df
 
 # Example usage
-def main():
-    pdf_path = "test.pdf"  # Replace with your PDF file path
-    output_csv_path = "output_extracted.csv"  # Replace with your desired output path
+pdf_path = 'test.pdf'  # Provided PDF path
+output_csv_path = 'extracted_output.csv'
 
-    extracted_data = extract_sections_from_pdf(pdf_path)
-    save_to_csv(extracted_data, output_csv_path)
-    print(f"CSV file saved to: {output_csv_path}")
+# Extract and save data
+extracted_data = extract_sections_from_pdf(pdf_path)
+output_df = save_to_csv(extracted_data, output_csv_path)
 
-if __name__ == "__main__":
-    main()
+output_csv_path
