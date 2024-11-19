@@ -1,144 +1,91 @@
+import json
 from PyPDF2 import PdfReader
-import pandas as pd
-import re
 
-def is_valid_subsection(current_section, next_section):
-    """
-    Check if the next section number is a valid subsection of the current section.
-    """
-    try:
-        current_parts = list(map(float, current_section.split(".")))
-        next_parts = list(map(float, next_section.split(".")))
 
-        # Ensure the next subsection is numerically valid
-        if len(next_parts) == len(current_parts):
-            return next_parts[-1] == current_parts[-1] + 1  # Increment by 1 at the same level
-        elif len(next_parts) == len(current_parts) + 1:
-            return next_parts[-1] == 1  # A new sub-level should start with .1
+def get_text():
+    current_section = 1
+    current_page = 0
+    starting_page = 0
+    ending_page = 0
+    all_sections = []
+    reader = PdfReader('test.pdf')
 
-        return False
-    except ValueError:
-        return False
+    all_text = ""
+    current_word_index = -1
 
-def extract_sections_from_pdf(pdf_path):
-    reader = PdfReader(pdf_path)
-    data = []
-    current_parent_section = ""
-    current_section = ""
-    current_title = ""
-    current_body = ""
-    section_start_page = None
-    section_end_page = None
-    buffer_text = ""
-    
-    # Track processed sections to avoid duplicates
-    processed_sections = set()
+    # Extract all text from the PDF
+    for page in reader.pages:
+        all_text += page.extract_text() + "\n"
 
-    # Patterns for headers and pages
-    page_pattern = re.compile(r'Page (\d+)')
-    section_pattern = re.compile(r'^(\d+(?:\.\d+)*)\s+(.+)$')  # Section numbers and titles
-    all_caps_pattern = re.compile(r'^[A-Z\s]+$')  # All caps titles
+    array_text = all_text.replace('R1-1', '').split()
 
-    for page_num, page in enumerate(reader.pages, start=1):
-        lines = page.extract_text().replace('R1-1', '').split('\n')  # Replace 'R1-1'
-        for line in lines:
-            line = line.strip()
+    for word in array_text:
+        current_word_index += 1
+        if current_word_index == len(array_text) - 1:
+            break
+        next_word = array_text[current_word_index + 1]
 
-            # Detect page numbers
-            if page_pattern.match(line):
-                continue
+        try:
+            # Detect page changes
+            if word == 'Page':
+                current_page += 1
 
-            # Detect section headers with numbering
-            section_match = section_pattern.match(line)
-            if section_match:
-                section_num = section_match.group(1)
-                section_title = section_match.group(2)
+            # Detect new sections
+            if int(word) == current_section and next_word.isupper():
+                section_title = ''
+                index = current_word_index
+                for title_word in array_text[current_word_index + 1:]:
+                    index += 1
+                    if title_word.isupper():
+                        section_title += ' ' + title_word
+                    else:
+                        # Prepare to extract the section content
+                        current_section += 1
+                        this_section_text = []
+                        starting_page = current_page  # Record starting page
+                        current_page_for_section = current_page
 
-                # Validate and handle buffered text if a valid subsection appears
-                if current_section and not is_valid_subsection(current_section, section_num):
-                    buffer_text += f"{section_num} {section_title} "
-                    continue
+                        for section_word in array_text[index:]:
+                            index += 1
+                            if index == len(array_text) - 1:
+                                this_section_text.append(array_text[-1])
+                                break
+                            else:
+                                next_word = array_text[index + 1]
 
-                # Save buffered text and current section before updating
-                if current_section or current_title:
-                    data.append({
-                        'Parent section': current_parent_section,
-                        'Section': current_section,
-                        'Section Title': current_title,
-                        'Section Body text': (current_body + " " + buffer_text).strip(),
-                        'section-start page': section_start_page,
-                        'section-end page': section_end_page or section_start_page
-                    })
-                    buffer_text = ""  # Clear buffer after saving
+                            # Detect page changes within the section
+                            if section_word == 'Page':
+                                current_page_for_section += 1
 
-                # Mark the section as processed
-                processed_sections.add(section_num)
+                            # Detect the end of the section
+                            try:
+                                if int(section_word) == current_section and next_word.isupper():
+                                    ending_page = current_page_for_section  # Record ending page
+                                    break
+                                else:
+                                    this_section_text.append(section_word)
+                            except ValueError:
+                                this_section_text.append(section_word)
 
-                # Update current section details
-                top_level_section = section_num.split('.')[0]  # Extract top-level section
-                current_parent_section = top_level_section if section_num != top_level_section else ""
-                current_section = section_num
-                current_title = section_title
-                current_body = ""
-                section_start_page = page_num
-                section_end_page = None
+                        # Record the section details
+                        ending_page = ending_page or current_page_for_section
+                        all_sections.append({
+                            'title': section_title.strip(),
+                            'section_id': current_section - 1,
+                            'section_text': ' '.join(this_section_text),
+                            'starting_page': starting_page,
+                            'ending_page': ending_page,
+                        })
+                        break
 
-            # Detect all caps titles (parent sections)
-            elif all_caps_pattern.match(line) and not section_pattern.match(line):
-                if current_section or current_title:
-                    data.append({
-                        'Parent section': current_parent_section,
-                        'Section': current_section,
-                        'Section Title': current_title,
-                        'Section Body text': (current_body + " " + buffer_text).strip(),
-                        'section-start page': section_start_page,
-                        'section-end page': section_end_page or section_start_page
-                    })
-                    buffer_text = ""
+        except ValueError:
+            # Continue if word is not an integer or part of a section
+            pass
 
-                current_parent_section = ""  # Reset parent section for top-level sections
-                current_section = ""
-                current_title = line
-                current_body = ""
-                section_start_page = page_num
-                section_end_page = None
+    # Save all sections to JSON
+    with open('main_sections.json', 'w') as file:
+        json.dump(all_sections, file, indent=4)
+        print("Extracted and saved all sections to 'main_sections.json'.")
 
-            else:
-                # Accumulate body text or buffer text if no valid header yet
-                if current_section or current_title:
-                    current_body += line + " "
-                else:
-                    buffer_text += line + " "
 
-        # Update end page for the last section on this page
-        section_end_page = page_num
-
-    # Save the last section
-    if current_section or current_title:
-        data.append({
-            'Parent section': current_parent_section,
-            'Section': current_section,
-            'Section Title': current_title,
-            'Section Body text': (current_body + " " + buffer_text).strip(),
-            'section-start page': section_start_page,
-            'section-end page': section_end_page
-        })
-
-    return data
-
-def save_to_csv(data, output_csv):
-    df = pd.DataFrame(data)
-    df.to_csv(output_csv, index=False, columns=[
-        'Parent section', 'Section', 'Section Title', 'Section Body text', 'section-start page', 'section-end page'
-    ])
-    return df
-
-# Example usage
-pdf_path = 'test.pdf'  # Provided PDF path
-output_csv_path = 'extracted_output.csv'
-
-# Extract and save data
-extracted_data = extract_sections_from_pdf(pdf_path)
-output_df = save_to_csv(extracted_data, output_csv_path)
-
-output_csv_path
+get_text()
