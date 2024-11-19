@@ -25,6 +25,7 @@ def extract_sections_from_pdf(pdf_path):
     data = []
     current_parent_section = ""
     current_section = ""
+    current_subsection = ""
     current_title = ""
     current_body = ""
     section_start_page = None
@@ -53,6 +54,20 @@ def extract_sections_from_pdf(pdf_path):
                 section_num = section_match.group(1)
                 section_title = section_match.group(2)
 
+                # Save the parent subsection if missing
+                if current_subsection and not section_num.startswith(current_subsection) and "." in section_num:
+                    parent_subsection = ".".join(section_num.split(".")[:-1])
+                    if parent_subsection not in processed_sections:
+                        data.append({
+                            'Parent section': current_parent_section,
+                            'Section': parent_subsection,
+                            'Section Title': "",
+                            'Section Body text': "",
+                            'section-start page': section_start_page,
+                            'section-end page': page_num,
+                        })
+                        processed_sections.add(parent_subsection)
+
                 # Validate the next section number
                 if current_section and not is_valid_subsection(current_section, section_num):
                     # If invalid, treat as body text
@@ -77,6 +92,7 @@ def extract_sections_from_pdf(pdf_path):
                 top_level_section = section_num.split('.')[0]  # Extract top-level section
                 current_parent_section = top_level_section if section_num != top_level_section else ""
                 current_section = section_num
+                current_subsection = ".".join(section_num.split(".")[:-1]) if "." in section_num else ""
                 current_title = section_title
                 current_body = ""
                 section_start_page = page_num
@@ -95,6 +111,7 @@ def extract_sections_from_pdf(pdf_path):
                     })
                 current_parent_section = ""  # Reset parent section for top-level sections
                 current_section = ""
+                current_subsection = ""
                 current_title = line
                 current_body = ""
                 section_start_page = page_num
