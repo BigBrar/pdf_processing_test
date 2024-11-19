@@ -1,86 +1,90 @@
+import json
 import time
 from PyPDF2 import PdfReader
-import traceback
-from decimal import Decimal
-def is_float(string,current_subsection):
-    try:
-        next_subsection = round(current_subsection+0.1,2)
-        if float(string) and next_subsection == float(string):  
-            return True     
-    except ValueError:
-        return False  
-
 
 def get_text():
+    current_section = 1
     current_page = 0
-    current_section = 0
+    starting_page = 0
+    ending_page = 0
     all_sections = []
-    total_sections = []
-    subsection_heading  = []
-    current_subsection = 0
     reader = PdfReader('test.pdf')  
 
     all_text = ""
-
+    current_word_index = -1
     for page in reader.pages:
         all_text += page.extract_text() + "\n"  
 
-    
-
-    list_array = all_text.replace('R1-1','').split()
-
-    for i,word in enumerate(list_array):
+    array_text = all_text.replace('R1-1','').split()
+    for word in array_text:
+        current_word_index+=1
+        if current_word_index == len(array_text)-1:
+            break
+        # print(f'current index -{current_word_index}')
+        # print(len(array_text))
+        # quit()
+        next_word = array_text[current_word_index+1]
         try:
-            if word.isdigit(): #getting into the main sectino such as '1'
-                if list_array[i+1] == 'USE':
-                    print(word)
-                    time.sleep(3)
-
-                next_word = list_array[i+1]
-                if next_word.isupper() and not next_word.startswith('R1-'): 
-                    print(word)
-                    section = ''
-                    new_list = list_array[i+1:-1]
-                    current_section +=1
-                    current_subsection = 0
-                    for word in new_list: #breaking down smaller sub sections of the main
-                        if word.isupper():
-                            section+=' '+word
-                        else:
-                            all_sections.append(section)
+            if word == 'Page':
+                starting_page = current_page
+                current_page+=1
+            if int(word) and int(word) == current_section and next_word.isupper():
+                section_title = ''
+                index = current_word_index
+                for title_word in array_text[current_word_index+1:-1]:
+                    index+=1
+                    if title_word.isupper():
+                        section_title+=' '+title_word
+                    else:
+                        # print(section_title)
+                        current_section+=1
+                        this_section_text = []
+                        current_page1 = current_page
+                        for word in array_text[index:-1]:
+                            index+=1
+                            if index == len(array_text)-1:
+                                this_section_text.append(array_text[-1])
+                                break
+                            else:
+                                # print(word)
+                                next_word = array_text[index+1]
+                            if word == 'Page':
+                                current_page1+=1
+                                # time.sleep(10)
+                            # if word == '2':
+                            #     print("found word")
+                            #     print(int(word) == current_section)
+                            #     print(next_word.isupper())
+                            #     print(next_word)
+                            #     print(array_text[index])
+                            #     time.sleep(1)
                             try:
-                                if float(word) and '.' in word and round(float(current_section)+0.1,2) == float(word) and str(new_list[new_list.index(word)+1])[0].isupper() and float(word) != current_subsection:# 1.1
-                                    # quit()
-                                    current_subsection = float(word)
-                                    print(f'current subsection = {current_subsection}')
-                                    print('current word = ',word)
-                                    current_index = new_list.index(word)
-                                    next_word = new_list[current_index+1]
-                                    print("next word = ",next_word)
-                                    input('continue?')
-                                    if not next_word[0].isupper():
-                                        break
-                                    subsection_heading.append(next_word)
-                                        
-                                elif  float(word) and '.' in word and round(float(current_subsection)+0.1,2) == float(word) and str(new_list[new_list.index(word)+1])[0].isupper():
-                                    print(new_list[3:new_list.index(word)])
-                                    input("Move ?")
-                                    current_subsection = float(word)
-                                    print('word = ',word)
-                                    next_word = list_array[list_array.index(word)+1]
-                                    if next_word[0].isupper():
-                                        subsection_heading.append(next_word)
-                                        print(subsection_heading)
-                                
-                                # elif  float(word) and '.' in word and round(float(current_subsection)+'0.0.1',2) == float(word) and str(new_list[new_list.index(word)+1])[0].isupper():
-                                
+                                if int(word) and int(word) == current_section and next_word.isupper():
+                                    # print('if block ran')
+                                    ending_page = current_page1
+                                    break
+                                else:
+                                    this_section_text.append(word)
                                 
                             except Exception as e:
-                                pass
-            
+                                # print(e)
+                                this_section_text.append(word)
+                        # print('break statement ran')
+                        # print(section_title)
+                        # input('continue ?')
+                        # time.sleep(100)
+                        all_sections.append({'title':section_title, 'section_id':int(current_section)-1, 'section_text':this_section_text, 'starting_page':starting_page, 'ending_page':ending_page})
+                        # print("section added")
+                        break
+                # input('done?')
+
                 
         except Exception as e:
-            print(f'Exception - {e}')
-            traceback.print_exc()
-            continue
+            pass
+    with open('main_sections.json','w')as file:
+        json.dump(all_sections,file)
+        print("extracted and saved all sections to 'main_sections.json'")
+    # print(all_sections)
+
+
 get_text()
