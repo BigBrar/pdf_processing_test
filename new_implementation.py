@@ -94,6 +94,7 @@ def get_text():
 def extract_subsections():
     gotton_subsections = []
     current_subsection = ''
+    all_section_text = []
     all_subsection = []
     with open('main_sections.json','r')as file:
         all_sections = json.load(file)
@@ -116,8 +117,28 @@ def extract_subsections():
                             # print(word)
                             current_subsection = word
                             gotton_subsections.append(word)
+                            new_index = index
+                            this_section_text = []
+                            for new_word in all_word[index:-1]:
+                                new_index+=1
+                                try:
+                                    if float(new_word) and '.' in new_word and round(float(current_subsection)+0.1,2) == float(new_word) and str(all_word[new_index])[0].isupper():
+                                        all_section_text.append(
+                                            {
+                                                'subsection':current_subsection,
+                                                'section_text':this_section_text
+                                            }
+                                            )
+                                        break
+                                    else:
+                                        this_section_text.append(new_word)
+                                except:
+                                    # print(new_word)
+                                    this_section_text.append(new_word)
                         # time.sleep(10)
                     elif  float(word) and '.' in word and round(float(current_subsection)+0.1,2) == float(word) and str(all_word[index])[0].isupper():
+                        print('\n\n\n',all_section_text)
+                        time.sleep(100)
                         # print('next subsection:',word)
                         # print('next word',str(all_word[all_word.index(word)+1]))
                         if word in gotton_subsections:
