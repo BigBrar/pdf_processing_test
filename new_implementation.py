@@ -43,9 +43,9 @@ def get_subsection_text(all_word, index, current_subsection, all_section_text, t
         except Exception as e:
             # print(this_section_text)
             # print(new_word)
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            print(e)
-            print(f"Occurred at line: {exc_traceback.tb_lineno}")
+            # exc_type, exc_value, exc_traceback = sys.exc_info()
+            # print(e)
+            # print(f"Occurred at line: {exc_traceback.tb_lineno}")
             # print('exception ran')
             this_section_text.append(new_word)
             # time.sleep(10)
@@ -234,7 +234,11 @@ def extract_subsections():
                             gotton_subsections.append(word)
                             new_index = index
                             this_section_text = []
-                            all_section_text = get_subsection_text(all_word, index, current_subsection, all_section_text, this_section_text, new_index, word, subsubsection)
+                            all_section_text = get_subsection_text(all_word, index, current_subsection,
+                             all_section_text, this_section_text, new_index, word, subsubsection)
+                            # print(all_section_text)
+                            # print(f'current subsection: {current_subsection}')
+                            # input('continue?')
                             
                     elif  float(word) and '.' in word and round(float(current_subsection)+0.1,2) == float(word) and str(all_word[index])[0].isupper():
                         # print('\n\n\n',all_section_text)
@@ -279,22 +283,22 @@ def extract_subsections():
                         # print(word)
                         if len(subsubsection) == 0:
                             # print(current_subsection)
-                            # print(f'subsubsection1:{word}')
+                            print(f'subsubsection1:{word}')
                             subsubsection.append(word)
                             # gotton_subsections.append(word)
                             new_index = index
                             this_section_text = []
                             all_section_text = get_subsubsection_text(all_word, index, current_subsection, all_section_text, this_section_text, new_index, word, subsubsection)
-                            # print('got the output')
-                            # print(all_section_text)
-                            # input('print?')
+                            print(all_section_text[-1])
+                            print(f'current subsubsection: {subsubsection[-1]}')
+                            input('print?')
 
                         else:
                             # print('else block ran')
                             # print(int(subsubsection[-1]))
                             # print(int(subsubsection[-1][0]))
                             # time.sleep(10)
-                            if int(str(subsubsection[-1])[-1]) < int(word.split('.')[-1]) and word not in subsubsection:
+                            if  word not in subsubsection:
                                 print(f'subsubsection2:{word}')
                                 
                                 new_index = index
@@ -302,9 +306,6 @@ def extract_subsections():
                                 subsubsection.append(word)
                                 this_section_text = []
                                 all_section_text = get_subsubsection_text(all_word, index, current_subsection, all_section_text, this_section_text, new_index, word, subsubsection)
-                                # print('got the output')
-                                # print(all_section_text)
-                                # input('print?')
                     
                     # elif word.startswith(str(gotton_subsections[-1])) and '.' in word and int(word[-1]):
                     #     print(word)
